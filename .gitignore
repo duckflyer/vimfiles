@@ -1,0 +1,5 @@
+# don't track colorschemes for which I have no copyrights
+colors/
+
+# net tree files
+.netr*
