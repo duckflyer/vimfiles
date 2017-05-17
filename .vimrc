@@ -275,7 +275,6 @@ function! ToggleSyntax()
 endfunction
 
 let s:minfontsz = 6
-let s:maxfontsz = 24
 function! AdjustFontSize(amount)
     if has("gui_running")
         let fontparts = split(&guifont, ' ')
@@ -311,3 +310,4 @@ function! SmallerFont()
 endfunction
 command! SmallerFont call SmallerFont()
 
+" END
