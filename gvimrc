@@ -14,7 +14,7 @@ set guioptions-=l
 set guioptions-=L
 " set guifont=Anonymous_Pro:h11:cANSI  
 " set guifont=Hack:h9:cANSI
-" set guifont=Monaco:h12:cANSI
-set guifont=Ubuntu\ Mono\ 12
+set guifont=Monaco\ 14
+" set guifont=Ubuntu\ Mono\ 12
 colorscheme basic
 

@@ -134,10 +134,10 @@ filetype plugin indent on   " required
 
 " NERDTree setup
 " Open a NERDTree automatically when vim starts up
-autocmd vimenter * NERDTree
-map <C-n> :NERDTreeToggle<CR>
-let g:NERDTreeDirArrowExpandable  = '▸'
-let g:NERDTreeDirArrowCollapsible = '▾'
+" autocmd vimenter * NERDTree
+" map <C-n> :NERDTreeToggle<CR>
+" let g:NERDTreeDirArrowExpandable  = '▸'
+" let g:NERDTreeDirArrowCollapsible = '▾'
 
 
 " basics options
@@ -318,15 +318,21 @@ let s:minfontsz = 6
 let s:maxfontsz = 24
 function! AdjustFontSize(amount)
     if has("gui_running")
-        let fontparts = split(&guifont, ' ')
-        let cursize = substitute(fontparts[1], '^h', '', '')
+        " TODO(omerp): old version was finicky, this might
+        " work better. It might not, then I have to fix it.
+        " let fontparts = split(&guifont, ' ')
+        " let cursize = substitute(fontparts[1], '^h', '', '')
+        " let newsize = cursize + a:amount
+        " let newsetting = substitute(&guifont, cursize, newsize, '')
+        let cursize = substitute(&guifont, '^.*\<\(\d\+\)\>', '\1', '')
         let newsize = cursize + a:amount
         if ((newsize >= s:minfontsz) && (newsize <= s:maxfontsz))
             let &guifont = 
-\               join([fontparts[0], newsize],  ' ')
+            \     substitute(&guifont, cursize, newsize, '')     
+" \               join([fontparts[0], newsize],  ' ')
         endif
     else
-        echoerr "You need to run WIN version of Vim to use this function."
+        echoerr "You need to run GUI version of Vim to use this function."
     endif
 endfunction
 
@@ -351,3 +357,31 @@ function! SmallerFont()
 endfunction
 command! SmallerFont call SmallerFont()
 
+    " Note this is good when you know path is a file path...
+    " Otherwise, the whole splitting to dirname and basename
+    " is useless. I think I should file a better name
+function! OpenResource(program, path, ... )
+    " Find if the file exist
+    if !filereadable(a:path)
+        echo a:path . " does not exist or is not readable."
+        return 0
+    endif
+    " Make sure the exe is valid
+    if executable(a:program) == 0
+        echo a:program . " does not exist."
+        return 0
+    elseif executable(a:program) == -1
+        echo "Yikes. " . a:program . " is not implemented."
+        return 0
+    endif
+    " Split into basename and dirname
+    let parts = split(a:path, '/')
+    let basename = parts[-1]
+    let ext = substitute(basename, '^.*\.\(.*\)$', '\=submatch(1)', '')
+    " Build the shell command to run a:program
+    " First handle the options
+    let options = a:0 ? (" " . join(a:000, ' ' ) . " ") : ' '
+    " TODO(omerp): Replace this with 'printf'
+    execute '!' . a:program . options . a:path . ' &'
+    return 0
+endfunction
