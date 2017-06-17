@@ -360,7 +360,7 @@ command! SmallerFont call SmallerFont()
     " Note this is good when you know path is a file path...
     " Otherwise, the whole splitting to dirname and basename
     " is useless. I think I should file a better name
-function! OpenResource(program, path, ... )
+function! OpenFileUsing(program, path, ... )
     " Find if the file exist
     if !filereadable(a:path)
         echo a:path . " does not exist or is not readable."
@@ -381,7 +381,6 @@ function! OpenResource(program, path, ... )
     " Build the shell command to run a:program
     " First handle the options
     let options = a:0 ? (" " . join(a:000, ' ' ) . " ") : ' '
-    " TODO(omerp): Replace this with 'printf'
-    execute '!' . a:program . options . a:path . ' &'
+    execute printf("! %s %s %s &", a:program, options, a:path)
     return 0
 endfunction
