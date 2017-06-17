@@ -357,15 +357,14 @@ function! SmallerFont()
 endfunction
 command! SmallerFont call SmallerFont()
 
-    " Note this is good when you know path is a file path...
-    " Otherwise, the whole splitting to dirname and basename
-    " is useless. I think I should file a better name
 function! OpenFileUsing(program, path, ... )
+
     " Find if the file exist
     if !filereadable(a:path)
         echo a:path . " does not exist or is not readable."
         return 0
     endif
+
     " Make sure the exe is valid
     if executable(a:program) == 0
         echo a:program . " does not exist."
@@ -374,13 +373,108 @@ function! OpenFileUsing(program, path, ... )
         echo "Yikes. " . a:program . " is not implemented."
         return 0
     endif
+
     " Split into basename and dirname
     let parts = split(a:path, '/')
     let basename = parts[-1]
     let ext = substitute(basename, '^.*\.\(.*\)$', '\=submatch(1)', '')
+
     " Build the shell command to run a:program
     " First handle the options
     let options = a:0 ? (" " . join(a:000, ' ' ) . " ") : ' '
     execute printf("! %s %s %s &", a:program, options, a:path)
     return 0
 endfunction
+
+
+" Note(omerp): Stolen from Damian Conway's code for vim tricks for Perl
+"======[ Magically build interim directories if necessary ]===================
+
+function! AskQuit (msg, options, quit_option)
+    if confirm(a:msg, a:options) == a:quit_option
+        exit
+    endif
+endfunction
+
+function! EnsureDirExists ()
+    let required_dir = expand("%:h")
+    if !isdirectory(required_dir)
+        call AskQuit("Parent directory '" . required_dir . "' doesn't exist.",
+             \       "&Create it\nor &Quit?", 2)
+
+        try
+            call mkdir( required_dir, 'p' )
+        catch
+            call AskQuit("Can't create '" . required_dir . "'",
+            \            "&Quit\nor &Continue anyway?", 1)
+        endtry
+    endif
+endfunction
+
+augroup AutoMkdir
+    autocmd!
+    autocmd  BufNewFile  *  :call EnsureDirExists()
+augroup END
+
+
+"=====[ Launch Application for File Under Cursor ]=============================
+
+" gvimrc
+let s:rules = []
+
+noremap <leader>x :call LaunchProgram(expand("<cWORD>"))<CR>
+
+" /home/omerp/projects/vim/vim.md
+" ../omerp/Documents/readings/lint.pdf
+
+function! LaunchProgram(uri)
+    echo "uri: " . a:uri
+    "If it is a file, figure out which kind and call associated program
+    " First, look in the directory of the file.
+    let path = findfile(a:uri, ".")
+    echo "path: " . path
+    let ext = substitute(a:uri, '^.*\.\(.*\)$', '\=submatch(1)', '')
+    echo "ext: " . ext
+    "if ext == 'pdf'
+        "execute printf("! %s %s %s &", 'evince', '', path)
+    "endif
+endfunction
+
+"=====[ Return the Directory Path "]===========================================
+
+if has("win32")
+    let s:pathsep = '\'
+else
+    let s:pathsep = '/'
+endif
+
+function! GetFileDirecotry(filepath)
+    return substitute(a:filepath, s:pathsep.'[^'.s:pathsep.']*$', '', '')
+endfunction
+
+"=====[ Toggle Comments "]=======================================================
+
+augroup Comment_Toggle
+     autocmd!
+     autocmd FileType            *sh,awk,python,perl    let b:cmt = exists('b:cmt') ?  b:cmt : '#'
+     autocmd FileType            dosbatch               let b:cmt = exists('b:cmt') ?  b:cmt : 'REM'
+     autocmd FileType            vim,vimrc,gvimrc       let b:cmt = exists('b:cmt') ?  b:cmt : '"'
+     autocmd FileType            c,cpp                  let b:cmt = exists('b:cmt') ?  b:cmt : '//'
+     autocmd BufNewFile,BufRead  *                      let b:cmt = exists('b:cmt') ?  b:cmt : '#'
+augroup END
+
+
+function! ToggleComment()
+    " Get the comment string
+    let comment_str = exists('b:cmt') ? b:cmt : '#'
+    let colnr = col('.')
+    let curline = getline('.')
+    if curline =~ '^\s*'. comment_str
+        call setline('.', substitute(curline, '^'.comment_str.' ', '', ''))
+    else
+        call setline('.', substitute(curline, '^', comment_str." ", ''))
+    endif
+endfunction
+
+nnoremap <silent> <leader>c :call ToggleComment()<CR>
+vnoremap <silent> <leader>c :call ToggleComment()<CR>j0
