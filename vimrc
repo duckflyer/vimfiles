@@ -470,6 +470,7 @@ endfunction
 augroup Toggle_Comment
     autocmd!
     autocmd FileType        *sh,awk,perl,python    let b:cmt = exists("b:cmt") ? b:cmt : '#'
+    autocmd FileType        markdown               let b:cmt = exists("b:cmt") ? b:cmt : '#'
     autocmd FileType        vim                    let b:cmt = exists("b:cmt") ? b:cmt : '"'
     autocmd FileType        c,cpp                  let b:cmt = exists("b:cmt") ? b:cmt : '//'
     autocmd FileType        ceva                   let b:cmt = exists("b:cmt") ? b:cmt : ';'
@@ -507,7 +508,7 @@ function! ToggleCommentBlock() range
     let currline_nr = a:firstline
     while currline_nr <= a:lastline
         let currline = getline(currline_nr)
-        while currline_nr <= a:lastline && currline =~ b:cmt
+        while currline_nr <= a:lastline && currline =~ '^\s*'.b:cmt
             call setline(currline_nr, ToggleComment(currline))
             let currline_nr += 1
             let currline = getline(currline_nr)
@@ -539,7 +540,20 @@ function! ToggleCommentBlock() range
         " Note: No need to worry currline_nr <= a:lastline because we checked
         "       at previous while loop.
         for n in range(comment_block_start, currline_nr - 1)
-            call setline(n, substitute(getline(n), '\%'.(col+1).'v', b:cmt.' ', ''))
+            " Some calculation is in order here to get the column correct.
+            " This is because virtual column match (that you get with
+            " '\%'.(col+1).'v' is _not_ going to match against tabs...
+            " the \%nnnc option sees the line '<Tab><Space><Tab>' as
+            " \t \t and it is not clear how virtual column looks at it.
+            "
+            " Note: I think it is better to expand the tabs in the line. Then
+            "       carry on as ussual. Later this can be take into account
+            "       the value of &expandtab. And if it is on, just count tabs
+            "       instead of spaces.
+            let s:spaces = { 2: '  ', 4: '    ', 8: '    ' }
+            let blanks = s:spaces[&tabstop]
+            let line = substitute(getline(n), '\t', blanks, 'g')
+            call setline(n, substitute(line, '\%'.(col+1).'v', b:cmt.' ', ''))
         endfor
     endwhile
 endfunction
