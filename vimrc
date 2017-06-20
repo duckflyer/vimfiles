@@ -147,9 +147,17 @@ set autoread
 
 " mapleader
 let mapleader=","
-set history=100 viminfo='100,<500,s10,h
+
+" set history, when opening vim, restore from the viminfo
+" file marks for up to 100 files, the buffer list,
+" registers smaller than 10Kbyte, store marks [0-9A-Z],
+" and 20 last search patterns.
+set history=1000 viminfo='100,s10,h,f1,/20
 set backspace=indent,eol,start
 set tabstop=4 shiftwidth=4 expandtab
+
+" reload a file as soon as it changes on disk
+set autoread
 
 " set how completion works for consecutive <Tab>
 " presses. First find the longest common string,
@@ -158,11 +166,14 @@ set tabstop=4 shiftwidth=4 expandtab
 set wildmode=longest,full
 set wildmenu
 set wildchar=<Tab>
+set wildignore=*.swp
 
 "round indent to multiple of 'shiftwidth'. applies to > and <"
 set shiftround
 set autoindent smartindent
 set ruler showcmd
+
+" search options: incremental search, highlight search results, use smart case
 set incsearch hlsearch
 set mouse=a
 set mousemodel=popup
@@ -196,6 +207,7 @@ endif
 nnoremap <silent> <leader>l :set list!<CR>
 
 
+filetype plugin indent on
 
 " mappings
 "---------
@@ -228,7 +240,7 @@ nnoremap <leader>ev :split $MYVIMRC<CR>
 nnoremap <leader>egv :split $MYGVIMRC<CR>
 
 " clear search highlights
-nnoremap <C-l> :noh<CR>
+nnoremap <silent> <C-l> :noh<CR>:redraw!<CR>
 
 "visual move, can move to a wrapped line"
 nnoremap j gj
@@ -244,8 +256,8 @@ cnoremap <A-f> <C-Right>
 cnoremap <A-b> <C-Left>
 
 " switching between buffers
-nnoremap <C-Tab> :bn<CR>
-nnoremap <C-S-Tab> :bp<CR>
+nnoremap <silent> <C-Tab> :bn<CR>
+nnoremap <silent> <C-S-Tab> :bp<CR>
 
 
 " high light lines longer than textwidth
@@ -276,6 +288,7 @@ if !exists("autocommands_loaded")
     let autocommands_loaded = 1
     autocmd BufWritePost $MYVIMRC  :source $MYVIMRC
     autocmd BufWritePost $MYGVIMRC :source $MYGVIMRC
+    autocmd VimResized * wincmd =
     " autocmd BufRead *.c, *.cpp, *.h :syntax off
 endif
 
@@ -454,27 +467,84 @@ endfunction
 
 "=====[ Toggle Comments "]=======================================================
 
-augroup Comment_Toggle
-     autocmd!
-     autocmd FileType            *sh,awk,python,perl    let b:cmt = exists('b:cmt') ?  b:cmt : '#'
-     autocmd FileType            dosbatch               let b:cmt = exists('b:cmt') ?  b:cmt : 'REM'
-     autocmd FileType            vim,vimrc,gvimrc       let b:cmt = exists('b:cmt') ?  b:cmt : '"'
-     autocmd FileType            c,cpp                  let b:cmt = exists('b:cmt') ?  b:cmt : '//'
-     autocmd BufNewFile,BufRead  *                      let b:cmt = exists('b:cmt') ?  b:cmt : '#'
+augroup Toggle_Comment
+    autocmd!
+    autocmd FileType        *sh,awk,perl,python    let b:cmt = exists("b:cmt") ? b:cmt : '#'
+    autocmd FileType        vim                    let b:cmt = exists("b:cmt") ? b:cmt : '"'
+    autocmd FileType        c,cpp                  let b:cmt = exists("b:cmt") ? b:cmt : '//'
+    autocmd FileType        ceva                   let b:cmt = exists("b:cmt") ? b:cmt : ';'
+    autocmd BufNewFile      *                      let b:cmt = exists("b:cmt") ? b:cmt : '#'
+    autocmd BufReadPre      vimrc,gvimrc           let b:cmt = exists("b:cmt") ? b:cmt : '"'
 augroup END
 
 
-function! ToggleComment()
-    " Get the comment string
-    let comment_str = exists('b:cmt') ? b:cmt : '#'
-    let colnr = col('.')
-    let curline = getline('.')
-    if curline =~ '^\s*'. comment_str
-        call setline('.', substitute(curline, '^'.comment_str.' ', '', ''))
+function! ToggleComment(line)
+    let comment_str = exists("b:cmt") ? b:cmt : '#'
+    " setline('.', substitute(getline('.'), '^', b:cmt . ' ', ''))
+    if a:line =~ '^\s*'.comment_str
+        return substitute(a:line, comment_str.' ', '', '')
     else
-        call setline('.', substitute(curline, '^', comment_str." ", ''))
+        return substitute(a:line, '^\(\s*\)\(\S\)',
+                    \   '\=submatch(1).comment_str." ".submatch(2)', '')
     endif
 endfunction
 
-nnoremap <silent> <leader>c :call ToggleComment()<CR>
-vnoremap <silent> <leader>c :call ToggleComment()<CR>j0
+" Given a range of lines to be commented or un-commented create
+" a column of b:cmt strings followed by a space before each line.
+" Subsquent uncommenting of each line, by removing the b:cmt string
+" and the following space must restore the line's original position.
+" If the selection contains several commented out, the column number should
+" not take their leftmost character (which is b:cmt) into account. Instead,
+" a search for the left-most line should start a fresh.
+" Psuedocode:
+" colum = MAX -- the left most column
+" line  = a:firstline
+" while line <= a:lastline:
+"   Toggle commented lines in range   
+"   find leftmost line until end of range or commented line
+"   comment lines with b:cmt starting at left most column
+function! ToggleCommentBlock() range
+    let currline_nr = a:firstline
+    while currline_nr <= a:lastline
+        let currline = getline(currline_nr)
+        while currline_nr <= a:lastline && currline =~ b:cmt
+            call setline(currline_nr, ToggleComment(currline))
+            let currline_nr += 1
+            let currline = getline(currline_nr)
+        endwhile
+        " currline has no comment / currline_nr > a:lastline
+        if currline_nr > a:lastline
+            break
+        endif
+        " currline has no comment, comment it...
+        " first find the left-most line
+        " Note:(omerp): Use a large number because I don't know
+        " the maximum for an integer in vimscript.
+        let col = 1000
+        let comment_block_start = currline_nr
+        while currline_nr <= a:lastline && currline !~ '^\s*'.b:cmt
+            let comment_col = match(currline, '\S')
+            " in case match failed to find the pattern, comment_col
+            " is -1. we want to skip such lines, so we check a match
+            " indeed succeeded.
+            if comment_col >= 0 && comment_col < col
+                let col = comment_col
+            endif
+            let currline_nr += 1
+            let currline = getline(currline_nr)
+        endwhile
+        
+        " Comment the lines in range comment_block_start to currline_nr - 1
+        " (inclusive) by inserting a b:cmt . ' ' at column `col'.
+        " Note: No need to worry currline_nr <= a:lastline because we checked
+        "       at previous while loop.
+        for n in range(comment_block_start, currline_nr - 1)
+            call setline(n, substitute(getline(n), '\%'.(col+1).'v', b:cmt.' ', ''))
+        endfor
+    endwhile
+endfunction
+
+nnoremap <silent> <leader>c :call setline('.', ToggleComment(getline('.')))<CR>
+" vnoremap <silent> <leader>c :call setline('.', ToggleComment(getline('.')))<CR>j0
+vnoremap <silent> <leader>c :call ToggleCommentBlock()<CR>j0
+
